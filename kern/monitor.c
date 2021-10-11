@@ -24,6 +24,8 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display a listing of function call frames", mon_backtrace},
+	{ "colorize", "Colorize your QEMU", mon_colorize},
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -32,7 +34,6 @@ int
 mon_help(int argc, char **argv, struct Trapframe *tf)
 {
 	int i;
-
 	for (i = 0; i < ARRAY_SIZE(commands); i++)
 		cprintf("%s - %s\n", commands[i].name, commands[i].desc);
 	return 0;
@@ -55,13 +56,82 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 }
 
 int
-mon_backtrace(int argc, char **argv, struct Trapframe *tf)
+mon_backtrace(int argc, char **argv, struct Trapframe*tf)
 {
 	// Your code here.
+	cprintf("Stack backtrace:\n");
+	uint32_t ebp, eip, esp;
+	uint32_t arg[5];
+	ebp = read_ebp();
+	while(ebp) // When to stop? See entry.S line 74.
+	{
+		esp = ebp + 4;
+		eip = *((uint32_t *)esp);
+		for(int i=0; i<5; i++)
+		{
+			esp += 4;
+			arg[i] = *((uint32_t *)esp);
+		}
+		cprintf("  ebp %08x  eip %08x args %08x %08x %08x %08x %08x\n", ebp, eip,
+		arg[0], arg[1], arg[2], arg[3], arg[4]);
+
+		struct Eipdebuginfo info;
+		debuginfo_eip(eip, &info);
+		cprintf("         %s:%d: %.*s+%d\n", info.eip_file, info.eip_line, info.eip_fn_namelen, 
+		info.eip_fn_name, eip-info.eip_fn_addr);
+
+		ebp = *((uint32_t *)ebp);
+	}
 	return 0;
 }
 
+/***** Here starts my challenge code *****/
+void colorize_help()
+{
+	cprintf("For example, type 'colorize 0 1' to change text to white and background to black.\n");
+	cprintf("color list:\n");
+	cprintf("	0	white\n");
+	cprintf("	1	black\n");
+	cprintf("	2	gray\n");
+	cprintf("	3	red\n");
+	cprintf("	4	green\n");
+	cprintf("	5	blue\n");
+	cprintf("	6	cyan\n");
+	cprintf("	7	magenta\n");
+	cprintf("	8	yellow\n");
+	cprintf("	9	default settings\n");
+}
 
+int mon_colorize(int argc, char **argv, struct Trapframe* tf)
+{
+	int Tcolorlist[10]={0x0F00,0x0000,0x0700,0x0400,0x0200,
+		0x0100,0x0300,0x0500,0x0E00,0x0000};
+	int Bcolorlist[10]={0xF000,0x0000,0x7000,0x4000,0x2000,
+		0x1000,0x3000,0x5000,0xE000,0x0000};
+	if (argc!=3)
+	{
+		cprintf("Too many or too little arguments\n");
+		colorize_help();
+		return 0;
+	}
+	int tcolor=argv[1][0]-48;
+	int bcolor=argv[2][0]-48;
+	if (tcolor<0 || tcolor>9 || bcolor<0 || bcolor>9)
+	{
+		colorize_help();
+		return 0;
+	}
+	if (tcolor==bcolor && tcolor!=9)
+	{
+		cprintf("Don't set the same color for text and background!\n");
+		return 0;
+	}
+	textcolor = Tcolorlist[tcolor];
+	backgroundcolor = Bcolorlist[bcolor];
+	cprintf("Colorized!\n");
+	return 0;
+}
+/***** Here ends my challenge code *****/
 
 /***** Kernel monitor command interpreter *****/
 
@@ -115,6 +185,13 @@ monitor(struct Trapframe *tf)
 	cprintf("Welcome to the JOS kernel monitor!\n");
 	cprintf("Type 'help' for a list of commands.\n");
 
+	// int x = 1, y = 3, z = 4;
+	// cprintf("x %d, y %x, z %d\n", x, y, z);
+
+	// unsigned int i = 0x00646c72;
+	// cprintf("H%x Wo%s", 57616, &i);
+
+	// cprintf("x=%d y=%d", 3);
 
 	while (1) {
 		buf = readline("K> ");

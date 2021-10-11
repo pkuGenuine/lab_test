@@ -7,6 +7,9 @@
 #define NULL	((void *) 0)
 #endif /* !NULL */
 
+int textcolor;
+int backgroundcolor;
+
 // lib/console.c
 void	cputchar(int c);
 int	getchar(void);
