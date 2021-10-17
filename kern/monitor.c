@@ -139,13 +139,13 @@ monitor(struct Trapframe *tf)
 	cprintf("Welcome to the JOS kernel monitor!\n");
 	cprintf("Type 'help' for a list of commands.\n");
 
-	int x = 1, y = 3, z = 4;
-	cprintf("x %d, y %x, z %d\n", x, y, z);
+	// int x = 1, y = 3, z = 4;
+	// cprintf("x %d, y %x, z %d\n", x, y, z);
 
-	unsigned int i = 0x00646c72;
-	cprintf("H%x Wo%s", 57616, &i);
+	// unsigned int i = 0x00646c72;
+	// cprintf("H%x Wo%s", 57616, &i);
 
-	cprintf("x=%d y=%d", 3);
+	// cprintf("x=%d y=%d", 3);
 
 	while (1) {
 		buf = readline("K> ");
