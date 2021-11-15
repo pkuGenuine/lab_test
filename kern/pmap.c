@@ -165,6 +165,7 @@ mem_init(void)
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
 	envs = (struct Env *) boot_alloc(NENV * sizeof(struct Env));
+	memset(envs, 0, NENV * sizeof(struct Env));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -289,7 +290,7 @@ page_init(void)
 		page_free_list = &pages[i];
 	}
 	// some of extended memory has been used by pages
-	int med = (int)ROUNDUP(((char *)pages)+(sizeof(struct PageInfo)*npages) - KERNBASE, PGSIZE)/PGSIZE;
+	int med = (int)ROUNDUP(((char *)envs)+(sizeof(struct Env)*NENV) - KERNBASE, PGSIZE)/PGSIZE;
 	for (i = med; i < npages; i++) {
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list; // pp_link: Next page on the free list.
@@ -564,6 +565,22 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	for (int i = 0; i < len; i++)
+	{
+		uint32_t tmp = (uint32_t)((char *)va + i);
+		if (tmp >= ULIM)
+		{
+			user_mem_check_addr = tmp;
+			return -E_FAULT;
+		}
+		pte_t *pte = pgdir_walk(env->env_pgdir, (void *)tmp, 0);
+
+		if (((perm|PTE_P)&(*pte)) != (perm|PTE_P))
+		{
+			user_mem_check_addr = tmp;
+			return -E_FAULT;
+		}
+	}
 
 	return 0;
 }

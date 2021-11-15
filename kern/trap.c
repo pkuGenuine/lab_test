@@ -65,7 +65,73 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	/*************************
+	void divide_handler();
+	void debug_handler();
+	void nmi_handler();
+	void brkpt_handler();
+	void oflow_handler();
+	void bound_handler();
+	void illop_handler();
+	void device_handler();
+	void dblflt_handler();
+	void tss_handler();
+	void segnp_handler();
+	void stack_handler();
+	void gpflt_handler();
+	void pgflt_handler();
+	void fperr_handler();
+	void align_handler();
+	void mchk_handler();
+	void simderr_handler();
 
+	void timer_handler();
+	void kbd_handler();
+	void serial_handler();
+	void spurious_handler();
+	void ide_handler();
+	void error_handler();
+
+	SETGATE(idt[T_DIVIDE], 0, GD_KT, divide_handler, 0);
+	SETGATE(idt[T_DEBUG], 0, GD_KT, debug_handler, 0);
+	SETGATE(idt[T_NMI], 0, GD_KT, nmi_handler, 0);
+	SETGATE(idt[T_BRKPT], 0, GD_KT, brkpt_handler, 3);
+	SETGATE(idt[T_OFLOW], 0, GD_KT, oflow_handler, 0);
+	SETGATE(idt[T_BOUND], 0, GD_KT, bound_handler, 0);
+	SETGATE(idt[T_ILLOP], 0, GD_KT, illop_handler, 0);
+	SETGATE(idt[T_DEVICE], 0, GD_KT, debug_handler, 0);
+	SETGATE(idt[T_DBLFLT], 0, GD_KT, dblflt_handler, 0);
+	SETGATE(idt[T_TSS], 0, GD_KT, tss_handler, 0);
+	SETGATE(idt[T_SEGNP], 0, GD_KT, segnp_handler, 0);
+	SETGATE(idt[T_STACK], 0, GD_KT, stack_handler, 0);
+	SETGATE(idt[T_GPFLT], 0, GD_KT, gpflt_handler, 0);
+	SETGATE(idt[T_PGFLT], 0, GD_KT, pgflt_handler, 0);
+	SETGATE(idt[T_FPERR], 0, GD_KT, fperr_handler, 0);
+	SETGATE(idt[T_ALIGN], 0, GD_KT, align_handler, 0);
+	SETGATE(idt[T_MCHK], 0, GD_KT, mchk_handler, 0);
+	SETGATE(idt[T_SIMDERR], 0, GD_KT, simderr_handler, 0);
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, syscall_handler, 3);
+
+	SETGATE(idt[IRQ_OFFSET + IRQ_TIMER], 0, GD_KT, timer_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_KBD], 0, GD_KT, kbd_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SERIAL], 0, GD_KT, serial_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SPURIOUS], 0, GD_KT, spurious_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_IDE], 0, GD_KT, ide_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_ERROR], 0, GD_KT, error_handler, 0);
+	*************************/
+	// challenge
+	void syscall_handler();
+	extern void (*functions[])();
+	for (int i = 0; i < 20; i++){
+		if (i == T_BRKPT){
+			SETGATE(idt[i], 0, GD_KT, functions[i], 3);
+		}
+		else if (i != 9 && i!= 15){
+			SETGATE(idt[i], 0, GD_KT, functions[i], 0);
+		}
+	}
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, syscall_handler, 3);
+	
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -144,6 +210,23 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+	switch (tf->tf_trapno)
+	{
+	case T_PGFLT:	// Exercise 5
+		if((tf->tf_cs & 3) == 0)	// Exercise 9
+			panic("The page fault happens in kernel mode!");
+		page_fault_handler(tf);
+		return;
+	case T_BRKPT:	// Exercise 6
+		monitor(tf);
+		return;
+	case T_SYSCALL:	// Exercise 7
+		tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax,tf->tf_regs.reg_edx, tf->tf_regs.reg_ecx,
+		tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
+		return;
+	default:
+		break;
+	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
