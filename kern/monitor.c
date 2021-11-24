@@ -11,6 +11,7 @@
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
 #include <kern/trap.h>
+#include <kern/pmap.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
@@ -25,6 +26,10 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display a listing of function call frames", mon_backtrace},
+	{ "showmappings", "Display all of the physical page mappings", mon_showmappings},
+	{ "setperm", "Explicitly set, clear, or change the permissions of any mapping in the current address space", mon_setperm},
+	{ "dump", "Dump the contents of a range of memory", mon_dump},
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -59,10 +64,147 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	// Your code here.
+	cprintf("Stack backtrace:\n");
+	uint32_t ebp, eip, esp;
+	uint32_t arg[5];
+	ebp = read_ebp();
+	while(ebp) // When to stop? See entry.S line 74.
+	{
+		esp = ebp + 4;
+		eip = *((uint32_t *)esp);
+		for(int i=0; i<5; i++)
+		{
+			esp += 4;
+			arg[i] = *((uint32_t *)esp);
+		}
+		cprintf("  ebp %08x  eip %08x args %08x %08x %08x %08x %08x\n", ebp, eip,
+		arg[0], arg[1], arg[2], arg[3], arg[4]);
+
+		struct Eipdebuginfo info;
+		debuginfo_eip(eip, &info);
+		cprintf("         %s:%d: %.*s+%d\n", info.eip_file, info.eip_line, info.eip_fn_namelen, 
+		info.eip_fn_name, eip-info.eip_fn_addr);
+
+		ebp = *((uint32_t *)ebp);
+	}
 	return 0;
 }
 
 
+int mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 3)	// guiding information
+	{
+		cprintf("Type \"showmappings saddr eaddr\" to display mapping and permission\n");
+		return 0;
+	}
+	uint32_t saddr = (uint32_t)strtol(argv[1], 0, 0);
+	uint32_t eaddr = (uint32_t)strtol(argv[2], 0, 0);
+	while (saddr <= eaddr)
+	{
+		pte_t *pte = pgdir_walk(kern_pgdir, (void *)saddr, 0);
+		if (!pte || (!(*pte) & PTE_P))
+		{
+			cprintf("Page 0x%x has no mapping!\n", saddr);
+			saddr += PGSIZE;
+			continue;
+		}
+		uint32_t pa = PTE_ADDR(*pte);
+		cprintf("VA 0x%x, PA 0x%x, PTE_P %x, PTE_W %x, PTE_U %x;\n",
+			saddr, pa, *pte & PTE_P, *pte & PTE_W, *pte & PTE_U);
+		saddr += PGSIZE;
+	}
+	return 0;
+}
+
+int mon_setperm(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 4)
+	{
+		cprintf("Type \"setperm vaddr mode perm\" to set permission\n");
+		cprintf("\tmode = 0(clear), 1(set), 2(change)\n");
+		cprintf("\tperm = 'P', 'W', 'U'\n");
+		return 0;
+	}
+	uint32_t va = (uint32_t)strtol(argv[1], 0, 0);
+	pte_t *pte = pgdir_walk(kern_pgdir, (void *)va, 0);
+	if (!pte || (!(*pte) & PTE_P))
+	{
+		cprintf("Page 0x%x has no mapping!\n", va);
+		return 0;
+	}
+	int mode = argv[2][0] - '0';
+	int perm = 0;
+	int plist[3] = {PTE_P, PTE_W, PTE_U};
+	cprintf("BEFORE: PTE_P %x, PTE_W %x, PTE_U %x;\n",
+			*pte & PTE_P, *pte & PTE_W, *pte & PTE_U);
+	switch (argv[3][0])
+	{
+	case 'P':
+		perm = 0;
+		break;
+	case 'W':
+		perm = 1;
+		break;
+	case 'U':
+		perm = 2;
+		break;
+	default:
+		break;
+	}
+	switch (mode)
+	{
+	case 0:
+		*pte &= ~(plist[perm]);
+		break;
+	case 1:
+		*pte |= plist[perm];
+		break;
+	case 2:
+		*pte ^= plist[perm];
+		break;
+	default:
+		break;
+	}
+	cprintf("AFTER: PTE_P %x, PTE_W %x, PTE_U %x;\n",
+			*pte & PTE_P, *pte & PTE_W, *pte & PTE_U);
+	return 0;
+}
+
+int mon_dump(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 4)
+	{
+		cprintf("Type \"dump addrtype start end\" to dump contents in [start, end]\n");
+		cprintf("\ttype: 'P' for physical address, 'V' for virtual address\n");
+		return 0;
+	}
+	char addrtype = argv[1][0];
+	uint32_t saddr = (uint32_t)strtol(argv[2], 0, 0);
+	uint32_t eaddr = (uint32_t)strtol(argv[3], 0, 0);
+	uint32_t content = 0;
+	if (addrtype == 'P')
+	{
+		saddr = (uint32_t)KADDR(saddr);
+		eaddr = (uint32_t)KADDR(eaddr);
+	}
+	while(saddr <= eaddr)
+	{
+		pte_t *pte = pgdir_walk(kern_pgdir, (void *)saddr, 0);
+		if (!pte || (!(*pte) & PTE_P))
+		{
+			cprintf("0x%x: Bad address\n", saddr);
+			saddr += 4;
+			continue;
+		}
+		uint32_t addr = saddr;
+		if (addrtype == 'P')
+			addr  = (uint32_t)PADDR((void *)addr);
+		cprintf("0x%x: 0x%x\n", addr, *((uint32_t *)saddr));
+		saddr += 1;
+	}
+	return 0;
+}
 
 /***** Kernel monitor command interpreter *****/
 
