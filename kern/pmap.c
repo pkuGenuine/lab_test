@@ -317,8 +317,11 @@ page_init(void)
 	// free pages!
 	size_t i;
 	// as in 2)
+	size_t tmp = MPENTRY_PADDR/PGSIZE;
 	for (i = 1; i < npages_basemem; i++)
 	{
+		if (i == tmp)
+			continue;
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
@@ -607,7 +610,15 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+	/* 
+	 * Exercise 1
+	 * "Reserve size bytes of virtual memory starting at base"
+	 * What does this mean???
+	 */
+	size_t aligned_size = ROUNDUP(size, PGSIZE);
+	boot_map_region(kern_pgdir, base, aligned_size, pa, PTE_PCD|PTE_PWT);
+	return (void *)base;
+	// panic("mmio_map_region not implemented");
 }
 
 static uintptr_t user_mem_check_addr;
