@@ -276,6 +276,10 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
+	for (int i = 0; i < NCPU; i++)
+	{
+		boot_map_region(kern_pgdir, KSTACKTOP - i * (KSTKSIZE + KSTKGAP) - KSTKSIZE, KSTKSIZE, PADDR(percpu_kstacks[i]), PTE_W);
+	}
 
 }
 
@@ -479,7 +483,7 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 //   - If necessary, on demand, a page table should be allocated and inserted
 //     into 'pgdir'.
 //   - pp->pp_ref should be incremented if the insertion succeeds.
-//   - The TLB must be invalidated if a page was formerly present at 'va'.(???)
+//   - The TLB must be invalidated if a page was formerly present at 'va'.
 //
 // Corner-case hint: Make sure to consider what happens when the same
 // pp is re-inserted at the same virtual address in the same pgdir.
@@ -610,14 +614,14 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	/* 
-	 * Exercise 1
-	 * "Reserve size bytes of virtual memory starting at base"
-	 * What does this mean???
-	 */
 	size_t aligned_size = ROUNDUP(size, PGSIZE);
-	boot_map_region(kern_pgdir, base, aligned_size, pa, PTE_PCD|PTE_PWT);
-	return (void *)base;
+	if (base + aligned_size > MMIOLIM)
+	{
+		panic("Overflow in mmio_map_region");
+	}
+	boot_map_region(kern_pgdir, base, aligned_size, pa, PTE_PCD|PTE_PWT|PTE_W);
+	base += aligned_size;	// reserved
+	return (void *)(base - aligned_size);
 	// panic("mmio_map_region not implemented");
 }
 

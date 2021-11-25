@@ -548,6 +548,7 @@ env_run(struct Env *e)
 		curenv->env_runs++;
 		lcr3(PADDR(e->env_pgdir));
 	}
+	unlock_kernel();
 	env_pop_tf(&e->env_tf);
 }
 
