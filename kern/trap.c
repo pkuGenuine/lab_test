@@ -87,12 +87,6 @@ void trap_init(void)
 	void mchk_handler();
 	void simderr_handler();
 
-	void timer_handler();
-	void kbd_handler();
-	void serial_handler();
-	void spurious_handler();
-	void ide_handler();
-	void error_handler();
 
 	SETGATE(idt[T_DIVIDE], 0, GD_KT, divide_handler, 0);
 	SETGATE(idt[T_DEBUG], 0, GD_KT, debug_handler, 0);
@@ -114,15 +108,17 @@ void trap_init(void)
 	SETGATE(idt[T_SIMDERR], 0, GD_KT, simderr_handler, 0);
 	SETGATE(idt[T_SYSCALL], 0, GD_KT, syscall_handler, 3);
 
-	SETGATE(idt[IRQ_OFFSET + IRQ_TIMER], 0, GD_KT, timer_handler, 0);
-	SETGATE(idt[IRQ_OFFSET + IRQ_KBD], 0, GD_KT, kbd_handler, 0);
-	SETGATE(idt[IRQ_OFFSET + IRQ_SERIAL], 0, GD_KT, serial_handler, 0);
-	SETGATE(idt[IRQ_OFFSET + IRQ_SPURIOUS], 0, GD_KT, spurious_handler, 0);
-	SETGATE(idt[IRQ_OFFSET + IRQ_IDE], 0, GD_KT, ide_handler, 0);
-	SETGATE(idt[IRQ_OFFSET + IRQ_ERROR], 0, GD_KT, error_handler, 0);
+	
 	*************************/
 	// challenge
 	void syscall_handler();
+	void timer_handler();
+	void kbd_handler();
+	void serial_handler();
+	void spurious_handler();
+	void ide_handler();
+	void error_handler();
+	
 	extern void (*functions[])();
 	for (int i = 0; i < 20; i++)
 	{
@@ -136,6 +132,12 @@ void trap_init(void)
 		}
 	}
 	SETGATE(idt[T_SYSCALL], 0, GD_KT, syscall_handler, 3);
+	SETGATE(idt[IRQ_OFFSET + IRQ_TIMER], 0, GD_KT, timer_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_KBD], 0, GD_KT, kbd_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SERIAL], 0, GD_KT, serial_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SPURIOUS], 0, GD_KT, spurious_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_IDE], 0, GD_KT, ide_handler, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_ERROR], 0, GD_KT, error_handler, 0);
 
 	// Per-CPU setup
 	trap_init_percpu();
@@ -260,6 +262,10 @@ trap_dispatch(struct Trapframe *tf)
 	case T_SYSCALL: // Exercise 7
 		tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx, tf->tf_regs.reg_ecx,
 									  tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
+		return;
+	case IRQ_OFFSET + IRQ_TIMER:
+		lapic_eoi();
+		sched_yield();
 		return;
 	default:
 		break;
