@@ -649,23 +649,25 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
-	for (int i = 0; i < len; i++)
+	// cprintf("user_mem_check: start\n");
+	uint32_t begin = (uint32_t)va;
+	uint32_t end = (uint32_t)va + len;
+	for (uint32_t i = begin; i < end; i++)
 	{
-		uint32_t tmp = (uint32_t)((char *)va + i);
-		if (tmp >= ULIM)
+		if (i >= ULIM)
 		{
-			user_mem_check_addr = tmp;
+			user_mem_check_addr = i;
 			return -E_FAULT;
 		}
-		pte_t *pte = pgdir_walk(env->env_pgdir, (void *)tmp, 0);
-
+		// cprintf("user_mem_check: before pgdir_walk\n");
+		pte_t *pte = pgdir_walk(env->env_pgdir, (void *)i, 1);
 		if (((perm|PTE_P)&(*pte)) != (perm|PTE_P))
 		{
-			user_mem_check_addr = tmp;
+			user_mem_check_addr = i;
 			return -E_FAULT;
 		}
+		// cprintf("user_mem_check: after pgdir_walk\n");
 	}
-
 	return 0;
 }
 

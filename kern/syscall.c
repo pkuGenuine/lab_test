@@ -136,7 +136,15 @@ static int
 sys_env_set_pgfault_upcall(envid_t envid, void *func)
 {
 	// LAB 4: Your code here.
-	panic("sys_env_set_pgfault_upcall not implemented");
+	struct Env *e;
+	int ret = envid2env(envid, &e, 1);
+	if (ret)
+		return ret;
+	e->env_pgfault_upcall = func;
+	// cprintf("sys_env_set_pgfault_upcall: OK\n");
+	return 0;
+	
+	// panic("sys_env_set_pgfault_upcall not implemented");
 }
 
 // Allocate a page of memory and map it at 'va' with permission
@@ -170,7 +178,7 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 	int ret = envid2env(envid, &e, 1);
 	if (ret)
 		return ret;
-	if ((uint32_t)va >= UTOP || ROUNDUP((uint32_t)va, PGSIZE) != (uint32_t)va)
+	if ((uint32_t)va >= UTOP || PGOFF(va) != 0)
 		return -E_INVAL;
 	if ((perm | PTE_SYSCALL) != PTE_SYSCALL || (perm & (PTE_U | PTE_P)) != (PTE_U | PTE_P))
 		return -E_INVAL;
@@ -221,9 +229,9 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	int dst = envid2env(dstenvid, &dste, 1);
 	if (src || dst)
 		return -E_BAD_ENV;
-	if ((uint32_t)srcva >= UTOP || ROUNDUP((uint32_t)srcva, PGSIZE) != (uint32_t)srcva)
+	if ((uint32_t)srcva >= UTOP || PGOFF(srcva) != 0)
 		return -E_INVAL;
-	if ((uint32_t)dstva >= UTOP || ROUNDUP((uint32_t)dstva, PGSIZE) != (uint32_t)dstva)
+	if ((uint32_t)dstva >= UTOP || PGOFF(dstva) != 0)
 		return -E_INVAL;
 	
 	pte_t *pte;
@@ -260,7 +268,7 @@ sys_page_unmap(envid_t envid, void *va)
 	int ret = envid2env(envid, &e, 1);
 	if (ret)
 		return ret;
-	if ((uint32_t)va >= UTOP || ROUNDUP((uint32_t)va, PGSIZE) != (uint32_t)va)
+	if ((uint32_t)va >= UTOP || PGOFF(va) != 0)
 		return -E_INVAL;
 	page_remove(e->env_pgdir, va);
 	return 0;
@@ -363,6 +371,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_page_map((envid_t)a1, (void *)a2, (envid_t)a3, (void *)a4, a5);
 	case SYS_page_unmap:
 		return sys_page_unmap((envid_t)a1, (void *)a2);
+	case SYS_env_set_pgfault_upcall:
+		return sys_env_set_pgfault_upcall((envid_t)a1, (void *)a2);
 	case NSYSCALLS:
 	default:
 		return -E_INVAL;
