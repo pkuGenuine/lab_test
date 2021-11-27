@@ -33,11 +33,11 @@ ipc_recv(envid_t *from_env_store, void *pg, int *perm_store)
 		return r;
 	} 
 	if (from_env_store)
-		*from_env_store = thisenv->env_ipc_from;
+		*from_env_store = (envs + ENVX(sys_getenvid()))->env_ipc_from;
 	if (perm_store)
-		*perm_store = thisenv->env_ipc_perm;
+		*perm_store = (envs + ENVX(sys_getenvid()))->env_ipc_perm;
 	// panic("ipc_recv not implemented");
-	return thisenv->env_ipc_value;
+	return (envs + ENVX(sys_getenvid()))->env_ipc_value;
 	return 0;
 }
 

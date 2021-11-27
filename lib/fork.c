@@ -85,6 +85,18 @@ duppage(envid_t envid, unsigned pn)
 	return 0;
 }
 
+// Challenge!
+static int
+sduppage(envid_t envid, unsigned pn)
+{
+	int r;
+	void *va = (void *)(pn * PGSIZE);
+	r = sys_page_map(sys_getenvid(), va, envid, va, uvpt[pn]&PTE_SYSCALL);
+	r = sys_page_map(sys_getenvid(), va, sys_getenvid(), va, uvpt[pn]&PTE_SYSCALL);
+	if (r) return r;
+	return 0;
+}
+
 //
 // User-level fork with copy-on-write.
 // Set up our page fault handler appropriately.
@@ -137,6 +149,39 @@ fork(void)
 int
 sfork(void)
 {
-	panic("sfork not implemented");
-	return -E_INVAL;
+	set_pgfault_handler(pgfault);
+	
+	envid_t eid = sys_exofork();
+	if (eid == 0)	// child, the same as dumbfork()
+	{
+		// thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+	if (eid < 0) return eid;
+
+	int ret = 0;
+	for (uint32_t i = 0; i < UTEXT; i+= PGSIZE)
+	{
+		if ((uvpd[PDX(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_U))
+			ret = sduppage(eid, PGNUM(i));
+		if (ret) return ret;
+	}
+	for (uint32_t i = UTEXT; i < USTACKTOP; i += PGSIZE)
+	{
+		if ((uvpd[PDX(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_U))
+			ret = duppage(eid, PGNUM(i));
+		if (ret) return ret;
+	}
+
+	ret = sys_page_alloc(eid, (void *)UXSTACKTOP - PGSIZE, PTE_P|PTE_W|PTE_U);
+	if (ret) return ret;
+	
+	extern void* _pgfault_upcall();
+	ret = sys_env_set_pgfault_upcall(eid, _pgfault_upcall);
+	if (ret) return ret;
+	ret = sys_env_set_status(eid, ENV_RUNNABLE);
+	if (ret) return ret;
+	return eid;
+	// panic("sfork not implemented");
+	// return -E_INVAL;
 }
