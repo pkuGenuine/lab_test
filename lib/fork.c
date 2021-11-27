@@ -154,22 +154,30 @@ sfork(void)
 	envid_t eid = sys_exofork();
 	if (eid == 0)	// child, the same as dumbfork()
 	{
-		// thisenv = &envs[ENVX(sys_getenvid())];
+		thisenv = &envs[ENVX(sys_getenvid())];
 		return 0;
 	}
 	if (eid < 0) return eid;
 
 	int ret = 0;
-	for (uint32_t i = 0; i < UTEXT; i+= PGSIZE)
+	uint32_t i;
+	for (i = USTACKTOP - PGSIZE; i >= UTEXT; i -= PGSIZE)
+	{
+		if ((uvpd[PDX(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_U))
+		{
+			ret = duppage(eid, PGNUM(i));
+			if (ret) return ret;
+		}
+		else
+		{
+			// cprintf("break: %x\n", i);
+			break;
+		}
+	}
+	for (i; i>0; i -= PGSIZE)
 	{
 		if ((uvpd[PDX(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_U))
 			ret = sduppage(eid, PGNUM(i));
-		if (ret) return ret;
-	}
-	for (uint32_t i = UTEXT; i < USTACKTOP; i += PGSIZE)
-	{
-		if ((uvpd[PDX(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_P) && (uvpt[PGNUM(i)]&PTE_U))
-			ret = duppage(eid, PGNUM(i));
 		if (ret) return ret;
 	}
 
