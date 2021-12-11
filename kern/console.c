@@ -197,6 +197,13 @@ cga_putc(int c)
 	}
 
 	// What is the purpose of this?
+	/* crt_pos, CRT_SIZE ?
+	 * memmove:
+	 *     void *memmove(void *dest, const void *src, size_t n);
+	 *     memory copy function, copy n bytes to dest address
+	 *     dest memory can overlap with src memory
+	 * buf overflow, so abort the first CRT_COLS
+	 */
 	if (crt_pos >= CRT_SIZE) {
 		int i;
 

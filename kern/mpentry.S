@@ -28,6 +28,7 @@
 #      symbols, rather than relying on the linker to fill them
 
 #define RELOC(x) ((x) - KERNBASE)
+# ap can only use low addr at this point
 #define MPBOOTPHYS(s) ((s) - mpentry_start + MPENTRY_PADDR)
 
 .set PROT_MODE_CSEG, 0x8	# kernel code segment selector
