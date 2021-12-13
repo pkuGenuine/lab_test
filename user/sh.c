@@ -55,7 +55,18 @@ again:
 			// then close the original 'fd'.
 
 			// LAB 5: Your code here.
-			panic("< redirection not implemented");
+			fd = open(t, O_RDONLY);
+			if (fd < 0)
+			{
+				cprintf("file does not exist\n");
+				exit();
+			}
+			if (fd)
+			{
+				dup(fd, 0);
+				close(fd);
+			}
+			// panic("< redirection not implemented");
 			break;
 
 		case '>':	// Output redirection

@@ -62,8 +62,20 @@ alloc_block(void)
 	// super->s_nblocks blocks in the disk altogether.
 
 	// LAB 5: Your code here.
-	panic("alloc_block not implemented");
-	return -E_NO_DISK;
+	// panic("alloc_block not implemented");
+	// return -E_NO_DISK;
+	// i starts from 3 because block 1 is super block
+	// and there is at least 1 block for bitmap(block 2).
+	int i;
+	for (i = 3; i < super->s_nblocks; i++)
+		if(block_is_free(i))
+			break;
+	// DEBUG LOG: bitmap is a pointer to an unsigned int, so we can't use `*bitmap` here.
+	// *bitmap &= ~(1<<i);
+	// This answer is similar to the last line of free_block.
+	bitmap[i/32] &= ~(1<<(i%32));
+	flush_block(bitmap + i/32);
+	return i;
 }
 
 // Validate the file system bitmap.
@@ -134,8 +146,30 @@ fs_init(void)
 static int
 file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool alloc)
 {
-       // LAB 5: Your code here.
-       panic("file_block_walk not implemented");
+    // LAB 5: Your code here.
+    // panic("file_block_walk not implemented");
+	if (filebno >= NDIRECT + NINDIRECT) return -E_INVAL;	// out of range
+	if (filebno < NDIRECT)	// access a direct block
+	{
+		*ppdiskbno = f->f_direct + filebno;
+		return 0;
+	}
+
+	// access an indirect block
+	uint32_t *indirectb;
+	if (f->f_indirect)
+		indirectb = (uint32_t *)diskaddr(f->f_indirect);
+	else
+	{
+		if (!alloc) return -E_NOT_FOUND;	// need to allocate an indirect block
+		int r = alloc_block();
+		if (r < 0) return r;
+		f->f_indirect = r;
+		indirectb = (uint32_t *)diskaddr(r);
+		memset(indirectb, 0, BLKSIZE);
+	}
+	*ppdiskbno = indirectb + filebno - NDIRECT;
+	return 0;
 }
 
 // Set *blk to the address in memory where the filebno'th
@@ -149,8 +183,23 @@ file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool all
 int
 file_get_block(struct File *f, uint32_t filebno, char **blk)
 {
-       // LAB 5: Your code here.
-       panic("file_get_block not implemented");
+    // LAB 5: Your code here.
+    // panic("file_get_block not implemented");
+	uint32_t *ppdiskbno;
+	int r = file_block_walk(f, filebno, &ppdiskbno, 1);
+	if (r) return r;
+	if (*ppdiskbno)
+	{
+		*blk = diskaddr(*ppdiskbno);
+		return 0;
+	}
+
+	// allocate a new one if necessary
+	r = alloc_block();
+	if (r < 0) return r;
+	*ppdiskbno = (uint32_t)r;
+	*blk = diskaddr(*ppdiskbno);
+	return 0;
 }
 
 // Try to find a file named "name" in dir.  If so, set *file to it.
