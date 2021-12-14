@@ -1,6 +1,16 @@
 
 #include "fs.h"
 
+// My challenge:
+#define CACHESIZE 8
+#define NEXTPOS(pos) ((pos + 1) % CACHESIZE)
+// record the addresses of the blocks cached
+static void *cache[CACHESIZE];
+// the next position to record a block in 'cache'
+static int cache_pos = 0;
+// how many blocks are cached at present
+static int cur_cache_size = 0;
+
 // Return the virtual address of this disk block.
 void*
 diskaddr(uint32_t blockno)
@@ -70,6 +80,34 @@ bc_pgfault(struct UTrapframe *utf)
 	// in?)
 	if (bitmap && block_is_free(blockno))
 		panic("reading free block %08x\n", blockno);
+
+	// My challenge:
+	// 1. The block has been cached.
+	for (int i = 0; i < CACHESIZE; i++)
+	{
+		if (addr == cache[i])
+			return;
+	}
+
+	// 2. There's free space in memory for the new block.
+	if (cur_cache_size < CACHESIZE)
+	{
+		cache[cache_pos] = addr;
+		cur_cache_size++;
+		cache_pos = NEXTPOS(cache_pos);
+		return;
+	}
+	
+	// 3. No free space! Evict the oldest block to cache the new one.
+	// Use FIFO for simplicity.
+	if (cache[cache_pos] == super)
+		cache_pos = NEXTPOS(cache_pos);
+	if (uvpt[PGNUM(cache[cache_pos])] & PTE_D)
+		flush_block(cache[cache_pos]);
+	r = sys_page_unmap(sys_getenvid(), cache[cache_pos]);
+	if (r) panic("in bc_pgfault, sys_page_unmap: %e", r);
+	cache[cache_pos] = addr;
+	cache_pos = NEXTPOS(cache_pos);
 }
 
 // Flush the contents of the block containing VA out to disk if
