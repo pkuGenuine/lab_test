@@ -58,7 +58,7 @@ again:
 			fd = open(t, O_RDONLY);
 			if (fd < 0)
 			{
-				cprintf("file does not exist\n");
+				cprintf("open %s for read: %e", t, fd);
 				exit();
 			}
 			if (fd)

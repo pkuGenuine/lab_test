@@ -240,8 +240,6 @@ serve_write(envid_t envid, struct Fsreq_write *req)
 	struct OpenFile *openfile;
 	int r = openfile_lookup(envid, req->req_fileid, &openfile);
 	if (r < 0) return r;
-	size_t req_n = req->req_n;
-	if (req_n > BLKSIZE) req_n = BLKSIZE;
 	r = file_write(openfile->o_file, req->req_buf, req->req_n, openfile->o_fd->fd_offset);
 	if (r < 0) return r;
 	
