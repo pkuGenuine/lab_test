@@ -2,12 +2,11 @@
 #include "fs.h"
 
 // My challenge:
+// evict the block that have not been used for the longest time
 #define CACHESIZE 8
-#define NEXTPOS(pos) ((pos + 1) % CACHESIZE)
 // record the addresses of the blocks cached
 static void *cache[CACHESIZE];
-// the next position to record a block in 'cache'
-static int cache_pos = 0;
+static int access[CACHESIZE]={0};
 // how many blocks are cached at present
 static int cur_cache_size = 0;
 
@@ -33,6 +32,16 @@ va_is_dirty(void *va)
 {
 	return (uvpt[PGNUM(va)] & PTE_D) != 0;
 }
+
+
+static void
+update_access(int k)
+{
+	for (int i = 0; i < CACHESIZE; i++)
+		access[i]++;
+	access[k] = 0;
+}
+
 
 // Fault any disk block that is read in to memory by
 // loading it from disk.
@@ -86,28 +95,43 @@ bc_pgfault(struct UTrapframe *utf)
 	for (int i = 0; i < CACHESIZE; i++)
 	{
 		if (addr == cache[i])
+		{
+			update_access(i);
 			return;
+		}
 	}
-
 	// 2. There's free space in memory for the new block.
 	if (cur_cache_size < CACHESIZE)
 	{
-		cache[cache_pos] = addr;
+		cache[cur_cache_size] = addr;
+		update_access(cur_cache_size);
 		cur_cache_size++;
-		cache_pos = NEXTPOS(cache_pos);
 		return;
 	}
-	
-	// 3. No free space! Evict the oldest block to cache the new one.
-	// Use FIFO for simplicity.
-	if (cache[cache_pos] == super)
-		cache_pos = NEXTPOS(cache_pos);
-	if (uvpt[PGNUM(cache[cache_pos])] & PTE_D)
-		flush_block(cache[cache_pos]);
-	r = sys_page_unmap(sys_getenvid(), cache[cache_pos]);
-	if (r) panic("in bc_pgfault, sys_page_unmap: %e", r);
-	cache[cache_pos] = addr;
-	cache_pos = NEXTPOS(cache_pos);
+	// 3. No free space! Evict a block to cache the new one.
+	int p_evict = -1;
+	int p_access = -1;
+	for (int i = 0; i < CACHESIZE; i++)
+	{
+		if (access[i] > p_access && cache[i] != super)
+		{
+			p_evict = i;
+			p_access = access[i];
+		}
+	}
+	if (p_evict < 0)
+	{
+		for (int i = 0; i < CACHESIZE; i++)
+		{
+			cprintf("%d ",access[i]);
+		}
+		panic("No block to be evicted!");
+	}
+	if (uvpt[PGNUM(cache[p_evict])] & PTE_D)
+		flush_block(cache[p_evict]);
+	r = sys_page_unmap(sys_getenvid(), cache[p_evict]);
+	cache[p_evict] = addr;
+	update_access(p_evict);
 }
 
 // Flush the contents of the block containing VA out to disk if
